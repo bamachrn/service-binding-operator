@@ -2,6 +2,7 @@ import re
 import time
 import base64
 import json
+from json import JSONDecodeError
 from environment import ctx
 from command import Command
 
@@ -144,8 +145,12 @@ spec:
             print('Resource list is empty under namespace - {}'.format(namespace))
             return None
 
-    def is_resource_in(self, resource_type):
-        output, exit_code = self.cmd.run(f'{ctx.cli} get {resource_type}')
+    def is_resource_in(self, resource_type, resource_name=None):
+        if resource_name is None:
+            _, exit_code = self.cmd.run(f'{ctx.cli} get {resource_type}')
+        else:
+            _, exit_code = self.cmd.run(f'{ctx.cli} get {resource_type} {resource_name}')
+
         return exit_code == 0
 
     def wait_for_pod(self, pod_name_pattern, namespace, interval=5, timeout=600):
@@ -299,6 +304,18 @@ spec:
         else:
             print(f'Error getting value for {resource_type}/{name} in {namespace} path={json_path}: {output}')
             return None
+
+    def get_json_resource(self, resource_type, name, namespace):
+        error_msg = f"Error in getting resource: '{resource_type}' '{name}' namespace: '{namespace}'"
+        output, exit_code = self.cmd.run(f'{ctx.cli} get {resource_type} {name} -n {namespace} -o json')
+        assert exit_code == 0, error_msg
+        json_output = None
+        try:
+            json_output = json.loads(output)
+        except JSONDecodeError:
+            assert False, error_msg
+        assert json_output is not None, error_msg
+        return json_output
 
     def get_resource_info_by_jq(self, resource_type, name, namespace, jq_expression, wait=False, interval=5, timeout=120):
         output, exit_code = self.cmd.run(f'{ctx.cli} get {resource_type} {name} -n {namespace} -o json | jq  \'{jq_expression}\'')
